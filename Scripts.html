@@ -1,0 +1,704 @@
+<script>
+  const app = {
+    data: {
+      sales: [],
+      services: [],
+      dps: [],
+      dailyTrend: {}
+    },
+    chartInstance: null,
+    annualChartInstance: null,
+
+    init() {
+      // Setup initial dates (Current Month)
+      const today = new Date();
+
+      const month = today.getMonth() + 1;
+      const year = today.getFullYear();
+
+      const filterMonthElem = document.getElementById('filterMonth');
+      const filterYearElem = document.getElementById('filterYear');
+      const drFilterMonthElem = document.getElementById('drFilterMonth');
+      const drFilterYearElem = document.getElementById('drFilterYear');
+
+      if (filterMonthElem) filterMonthElem.value = month;
+      if (filterYearElem) filterYearElem.value = year;
+      if (drFilterMonthElem) drFilterMonthElem.value = month;
+      if (drFilterYearElem) drFilterYearElem.value = year;
+    },
+
+    navigate(viewId, title, btnElem) {
+      // Update Views
+      document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+      document.getElementById(viewId).classList.add('active');
+      document.getElementById('currentPageTitle').innerText = title;
+
+      // Update Active Navigation Item
+      document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+      if (btnElem) btnElem.classList.add('active');
+    },
+
+    showLoading(show) {
+      const overlay = document.getElementById('loadingOverlay');
+      if (show) overlay.classList.remove('hidden');
+      else overlay.classList.add('hidden');
+    },
+
+    formatCurrency(amount) {
+      return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(amount);
+    },
+
+    fetchData() {
+      const monthStr = document.getElementById('filterMonth').value;
+      const yearStr = document.getElementById('filterYear').value;
+
+      if (!monthStr || !yearStr) {
+        alert("Please select both Month and Year.");
+        return;
+      }
+
+      const m = parseInt(monthStr) - 1;
+      const y = parseInt(yearStr);
+
+      const startD = new Date(y, m, 1);
+      const endD = new Date(y, m + 1, 0);
+
+      const pad = n => n < 10 ? '0' + n : n;
+      const startDate = `${startD.getFullYear()}-${pad(startD.getMonth() + 1)}-${pad(startD.getDate())}`;
+      const endDate = `${endD.getFullYear()}-${pad(endD.getMonth() + 1)}-${pad(endD.getDate())}`;
+
+      this.showLoading(true);
+
+      // Call Backend API for Sync and Fetch
+      google.script.run
+        .withSuccessHandler((res) => {
+          this.showLoading(false);
+          if (res.status === "error") {
+            alert("Error: " + res.message);
+            return;
+          }
+          // Handle combined response
+          this.onSuccess(res.monthly);
+          this.onAnnualSuccess(res.annual);
+        })
+        .withFailureHandler(this.onFailure.bind(this))
+        .syncDataFromDashboard(startDate, endDate, y);
+    },
+
+    onSuccess(response) {
+      this.showLoading(false);
+
+      if (!response) {
+        alert("Gagal mengambil data: Server tidak merespon.");
+        return;
+      }
+
+      if (response.status === "error") {
+        alert("Error from server: " + response.message);
+        return;
+      }
+
+      // Pastikan KPI object ada
+      const kpi = response.kpi || {};
+
+      const prevKpi = response.prevKpi || {};
+
+      // Store Data State
+      this.data = response.data || { sales: [], services: [], dps: [] };
+      this.data.dailyTrend = kpi.dailyTrend || {};
+
+      // Populate Location Filter Dropdown
+      const locSelect = document.getElementById('filterLocation');
+      if (locSelect) {
+        locSelect.innerHTML = '<option value="">All Locations</option>';
+        const uniqueLocs = [...new Set(this.data.sales.map(item => item.location).filter(Boolean))].sort();
+        uniqueLocs.forEach(loc => {
+          locSelect.innerHTML += `<option value="${loc}">${loc}</option>`;
+        });
+      }
+
+      /* === 1. DASHBOARD VIEW UPDATES === */
+      document.getElementById('kpiRevenue').innerText = this.formatCurrency(kpi.sales || 0);
+      document.getElementById('kpiRevenueTrend').outerHTML = this.getTrendHtml(kpi.sales || 0, prevKpi.sales || 0, 'vs last month', 'kpiRevenueTrend');
+
+      document.getElementById('kpiQty').innerText = (kpi.qty || 0).toLocaleString('id-ID');
+      document.getElementById('kpiQtyTrend').outerHTML = this.getTrendHtml(kpi.qty || 0, prevKpi.qty || 0, 'vs last month', 'kpiQtyTrend');
+
+      document.getElementById('kpiTx').innerText = (kpi.transactions || 0).toLocaleString('id-ID');
+      document.getElementById('kpiTxTrend').outerHTML = this.getTrendHtml(kpi.transactions || 0, prevKpi.transactions || 0, 'vs last month', 'kpiTxTrend');
+
+      this.renderLocationCards(kpi.locationSales || {}, prevKpi.locationSales || {});
+      this.renderChart(kpi.dailyTrend || {});
+
+      /* === 2. TRANSACTIONS VIEW UPDATES === */
+      this.renderTableTx(this.data.sales);
+
+      /* === 4. DPS VIEW UPDATES === */
+      let dpsRev = 0, dpsBarangJualRev = 0, dpsServiceCenterRev = 0;
+      if (this.data.dps) {
+        this.data.dps.forEach(i => {
+          const itemPrice = parseFloat(i.price) || 0;
+          dpsRev += itemPrice;
+          if (i.dpsType === "Service Center") {
+            dpsServiceCenterRev += itemPrice;
+          } else {
+            dpsBarangJualRev += itemPrice;
+          }
+        });
+        document.getElementById('kpiDpsBarangJual').innerText = this.formatCurrency(kpi.dpsBarangJualSales || 0);
+        const dpsBarangJualTrendId = document.getElementById('kpiDpsBarangJualTrend');
+        if (dpsBarangJualTrendId) dpsBarangJualTrendId.outerHTML = this.getTrendHtml(kpi.dpsBarangJualSales || 0, prevKpi.dpsBarangJualSales || 0, 'vs last month', 'kpiDpsBarangJualTrend');
+
+        document.getElementById('kpiDpsBarangJualRev').innerText = this.formatCurrency(dpsBarangJualRev);
+        document.getElementById('kpiDpsBarangJualRevTrend').outerHTML = this.getTrendHtml(dpsBarangJualRev, prevKpi.dpsBarangJualSales || 0, 'vs last month', 'kpiDpsBarangJualRevTrend');
+
+        document.getElementById('kpiDpsServiceCenterRev').innerText = this.formatCurrency(dpsServiceCenterRev);
+        document.getElementById('kpiDpsServiceCenterRevTrend').outerHTML = this.getTrendHtml(dpsServiceCenterRev, prevKpi.dpsServiceCenterSales || 0, 'vs last month', 'kpiDpsServiceCenterRevTrend');
+
+        document.getElementById('kpiDpsRev').innerText = this.formatCurrency(dpsRev);
+        document.getElementById('kpiDpsRevTrend').outerHTML = this.getTrendHtml(dpsRev, prevKpi.dpsRev || 0, 'vs last month', 'kpiDpsRevTrend');
+
+        this.renderTableDps(this.data.dps);
+      }
+    },
+
+    getTrendHtml(current, previous, label, id) {
+      if (!previous || previous === 0) return `<div id="${id}" class="trend-indicator"><i class="fa-solid fa-minus"></i> 0% <span>${label}</span></div>`;
+      const diff = ((current - previous) / previous) * 100;
+      const isUp = diff >= 0;
+      const trendClass = isUp ? 'trend-up' : 'trend-down';
+      const iconClass = isUp ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down';
+      const formattedDiff = Math.abs(diff).toFixed(1) + '%';
+      return `<div id="${id}" class="trend-indicator ${trendClass}"><i class="fa-solid ${iconClass}"></i> ${formattedDiff} <span>${label}</span></div>`;
+    },
+
+    onFailure(error) {
+      this.showLoading(false);
+      alert("System Error: " + error.message);
+    },
+
+    onAnnualSuccess(response) {
+      if (!response || response.status === "error") {
+        console.error("Failed to load annual data", response ? response.message : "");
+        return;
+      }
+
+      const ytd = response.ytd || {};
+      const prevYtd = response.prevYtd || {};
+      const chartData = response.annualChart || {};
+
+      document.getElementById('kpiYtdRevenue').innerText = this.formatCurrency(ytd.revenue || 0);
+      document.getElementById('kpiYtdRevenueTrend').outerHTML = this.getTrendHtml(ytd.revenue || 0, prevYtd.revenue || 0, 'vs last year', 'kpiYtdRevenueTrend');
+
+      document.getElementById('kpiYtdQty').innerText = (ytd.qty || 0).toLocaleString('id-ID');
+      document.getElementById('kpiYtdQtyTrend').outerHTML = this.getTrendHtml(ytd.qty || 0, prevYtd.qty || 0, 'vs last year', 'kpiYtdQtyTrend');
+
+      document.getElementById('kpiYtdTx').innerText = (ytd.tx || 0).toLocaleString('id-ID');
+      document.getElementById('kpiYtdTxTrend').outerHTML = this.getTrendHtml(ytd.tx || 0, prevYtd.tx || 0, 'vs last year', 'kpiYtdTxTrend');
+
+      this.renderAnnualChart(chartData);
+      this.renderAnnualLocationTable(chartData);
+    },
+
+    renderLocationCards(locationSales, prevLocationSales) {
+      const grid = document.getElementById('locationKpiGrid');
+      grid.innerHTML = '';
+
+      if (!locationSales || Object.keys(locationSales).length === 0) {
+        grid.innerHTML = '<p class="text-muted-empty">No location data available.</p>';
+        return;
+      }
+
+      const sortedLocations = Object.entries(locationSales).sort((a, b) => b[1] - a[1]);
+
+      sortedLocations.forEach(([locName, salesValue], index) => {
+        const prevValue = prevLocationSales[locName] || 0;
+        const trendId = `locTrend_${index}`;
+        const card = document.createElement('div');
+        card.className = 'kpi-card-horizontal glass-panel';
+        card.innerHTML = `
+          <div class="kpi-card-horizontal-icon blue"><i class="fa-solid fa-store"></i></div>
+          <div class="kpi-card-horizontal-details">
+            <h4>${locName}</h4>
+            <span class="value">${this.formatCurrency(salesValue)}</span>
+            ${this.getTrendHtml(salesValue, prevValue, '', trendId)}
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    },
+
+    renderChart(trendData) {
+      const ctx = document.getElementById('salesChart');
+      if (!ctx) return;
+
+      // Extract dates and sort chronologically
+      const dates = Object.keys(trendData).sort();
+      const values = dates.map(d => trendData[d]);
+
+      // Destroy previous instance to prevent overlaps
+      if (this.chartInstance) {
+        this.chartInstance.destroy();
+      }
+
+      this.chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: dates,
+          datasets: [{
+            label: 'Net Sales',
+            data: values,
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            borderWidth: 2,
+            tension: 0.4,
+            fill: true,
+            pointRadius: 4,
+            pointBackgroundColor: '#ffffff',
+            pointBorderColor: '#3b82f6'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (context) => this.formatCurrency(context.raw)
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false },
+              ticks: { color: '#64748b' }
+            },
+            y: {
+              grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false },
+              ticks: {
+                color: '#64748b',
+                callback: (value) => (value / 1000000).toFixed(0) + 'M'
+              }
+            }
+          }
+        }
+      });
+    },
+
+    renderAnnualChart(chartData) {
+      const ctx = document.getElementById('annualChart');
+      if (!ctx) return;
+      if (this.annualChartInstance) this.annualChartInstance.destroy();
+
+      if (!chartData || !chartData.months || chartData.locations.length === 0) return;
+
+      const colors = ['#d4af37', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6', '#f59e0b', '#ec4899'];
+      const datasets = chartData.locations.map((loc, idx) => {
+        const dataArr = chartData.months.map((m, mIdx) => {
+          const mStr = ("0" + (mIdx + 1)).slice(-2);
+          return chartData.data[mStr] ? (chartData.data[mStr][loc] || 0) : 0;
+        });
+
+        return {
+          label: loc,
+          data: dataArr,
+          backgroundColor: colors[idx % colors.length],
+          borderRadius: 4
+        };
+      });
+
+      this.annualChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: chartData.months,
+          datasets: datasets
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: { color: '#64748b', font: { family: 'Inter' } }
+            },
+            tooltip: {
+              callbacks: {
+                label: (context) => context.dataset.label + ': ' + this.formatCurrency(context.raw)
+              }
+            }
+          },
+          scales: {
+            x: {
+              stacked: true,
+              grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false },
+              ticks: { color: '#64748b' }
+            },
+            y: {
+              stacked: true,
+              grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false },
+              ticks: {
+                color: '#64748b',
+                callback: (value) => (value / 1000000).toFixed(0) + 'M'
+              }
+            }
+          }
+        }
+      });
+    },
+    renderAnnualLocationTable(chartData) {
+      const thead = document.getElementById('annualLocationTableHead');
+      const tbody = document.getElementById('annualLocationTableBody');
+      const tfoot = document.getElementById('annualLocationTableFoot');
+      if (!thead || !tbody || !tfoot) return;
+
+      if (!chartData || !chartData.months || !chartData.locations || chartData.locations.length === 0) {
+        thead.innerHTML = '<th>Month</th>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted-empty">No annual data available. Please sync data first.</td></tr>';
+        tfoot.innerHTML = '';
+        return;
+      }
+
+      // Filter out RB locations
+      const locations = chartData.locations.filter(loc => !loc || loc.indexOf('RB') !== 0);
+      if (locations.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted-empty">No retail locations found (all are RB).</td></tr>';
+        return;
+      }
+
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+      // Build header: Month | Location1 | Location2 | ... | TOTAL
+      let headerHtml = '<th>Month</th>';
+      locations.forEach(loc => { headerHtml += `<th class="text-right">${loc}</th>`; });
+      headerHtml += '<th class="text-right" style="color: var(--primary); font-weight:700;">TOTAL</th>';
+      thead.innerHTML = headerHtml;
+
+      // Build body rows (one per month)
+      const colTotals = {};
+      locations.forEach(loc => { colTotals[loc] = 0; });
+      let grandTotal = 0;
+
+      let bodyHtml = '';
+      for (let m = 0; m < 12; m++) {
+        const mStr = ("0" + (m + 1)).slice(-2);
+        let rowTotal = 0;
+        let cells = '';
+
+        locations.forEach(loc => {
+          const val = (chartData.data[mStr] && chartData.data[mStr][loc]) ? chartData.data[mStr][loc] : 0;
+          colTotals[loc] += val;
+          rowTotal += val;
+          const display = val === 0 ? '<span style="color:var(--text-muted)">-</span>' : this.formatCurrency(val);
+          cells += `<td class="text-right">${display}</td>`;
+        });
+
+        grandTotal += rowTotal;
+        const rowTotalDisplay = rowTotal === 0 ? '-' : this.formatCurrency(rowTotal);
+        bodyHtml += `<tr><td><strong>${monthNames[m]}</strong></td>${cells}<td class="text-right" style="font-weight:600; color: var(--primary);">${rowTotalDisplay}</td></tr>`;
+      }
+      tbody.innerHTML = bodyHtml;
+
+      // Build footer (column totals)
+      let footHtml = '<tr style="background: #f8fafc; font-weight: 700;"><td>TOTAL</td>';
+      locations.forEach(loc => {
+        footHtml += `<td class="text-right">${colTotals[loc] === 0 ? '-' : this.formatCurrency(colTotals[loc])}</td>`;
+      });
+      footHtml += `<td class="text-right" style="color: var(--primary); font-size: 1.05em;">${this.formatCurrency(grandTotal)}</td></tr>`;
+      tfoot.innerHTML = footHtml;
+    },
+
+    renderTableTx(dataList) {
+      const tbody = document.getElementById('tableBodyTx');
+      if (!dataList || dataList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="11" class="text-center text-muted-empty">No transactions found.</td></tr>`;
+        return;
+      }
+
+      let html = "";
+      dataList.forEach(item => {
+        const qtyRaw = parseInt(item.qty);
+        const qtyForCalc = (isNaN(qtyRaw) || qtyRaw === 0) ? 1 : qtyRaw;
+        const unitPrice = parseFloat(item.price) || 0;
+        const gross = qtyForCalc * unitPrice;
+        const itemDisc = parseFloat(item.subTotalDiscount) || 0;
+        const itemTax = parseFloat(item.subTotaltax || item.subTotalTax) || 0;
+        const itemNetSales = gross - itemDisc - itemTax;
+        const collCode = item.collectionCode ? `<span class="badge">${item.collectionCode}</span>` : '-';
+
+        html += `
+          <tr>
+            <td><strong>${item.transactionDate || '-'}</strong><br><small style="color:var(--text-muted)">${item.transactionTime || ''}</small></td>
+            <td style="font-family:monospace; color:var(--accent)">${item.transactionNo || '-'}</td>
+            <td>${item.location || '-'}</td>
+            <td>${item.salesman || '-'}</td>
+            <td>${item.customerName || '-'}</td>
+            <td>${item.description || item.catalogueCode || '-'}<br>${collCode}</td>
+            <td class="text-center"><strong>${qtyRaw || 0}</strong></td>
+            <td class="text-right" style="color:var(--danger)">${this.formatCurrency(itemDisc)}</td>
+            <td class="text-right" style="color:var(--text-muted)">${this.formatCurrency(itemTax)}</td>
+            <td class="text-right">${this.formatCurrency(unitPrice)}</td>
+            <td class="text-right" style="color:var(--revenue-color)"><strong>${this.formatCurrency(itemNetSales)}</strong></td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+    },
+
+    renderTableDps(dataList) {
+      const tbody = document.getElementById('tableBodyDps');
+      if (!tbody) return;
+      if (!dataList || dataList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted-empty">No records found.</td></tr>`;
+        return;
+      }
+
+      let html = "";
+      dataList.forEach(item => {
+        html += `
+          <tr>
+            <td>${item.transactionDate || '-'}</td>
+            <td style="font-family:monospace; color:var(--accent)">${item.transactionNo || '-'}</td>
+            <td>${item.location || '-'}</td>
+            <td>${item.customerName || '-'}</td>
+            <td><span class="badge ${item.dpsType === 'Service Center' ? 'badge-svc' : ''}">${item.dpsType || '-'}</span></td>
+            <td>${item.description || '-'}</td>
+            <td class="text-center"><strong>${item.qty || 0}</strong></td>
+            <td class="text-right" style="color:var(--revenue-color)"><strong>${this.formatCurrency(item.price || 0)}</strong></td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+    },
+
+    filterTable(datasetName, inputId, tbodyId) {
+      const searchVal = document.getElementById(inputId).value.toLowerCase();
+
+      let locFilter = "";
+      if (datasetName === 'sales') {
+        const locSelect = document.getElementById('filterLocation');
+        if (locSelect) locFilter = locSelect.value.toLowerCase();
+      }
+
+      const filtered = this.data[datasetName].filter(item => {
+        const str = `${item.customerName} ${item.transactionNo} ${item.salesman} ${item.location} ${item.description} ${item.collectionCode}`.toLowerCase();
+        const matchSearch = str.includes(searchVal);
+        const matchLoc = locFilter === "" || (item.location || "").toLowerCase() === locFilter;
+        return matchSearch && matchLoc;
+      });
+
+      if (datasetName === 'sales') this.renderTableTx(filtered);
+      else if (datasetName === 'dps') this.renderTableDps(filtered);
+    },
+
+    /* === DAILY REPORT CRM FUNCTIONS === */
+    fetchDailyReport() {
+        const loc = document.getElementById('drFilterLocation').value;
+        const monthStr = document.getElementById('drFilterMonth').value;
+        const quarter = document.getElementById('drFilterQuarter').value;
+        const yearStr = document.getElementById('drFilterYear').value;
+
+        if (!yearStr) {
+            alert("Please select Year.");
+            return;
+        }
+
+        this.showLoading(true);
+        google.script.run
+            .withSuccessHandler(res => {
+                this.showLoading(false);
+                if (res.success) {
+                    this.renderDailyReport(res);
+                } else {
+                    alert("Error: " + res.message);
+                }
+            })
+            .withFailureHandler(err => {
+                this.showLoading(false);
+                alert("Fatal Error: " + err.message);
+            })
+            .getDailyReportData(loc, monthStr, yearStr, quarter);
+    },
+
+    renderDailyReport(res) {
+      // 1. Render Traffic Summary
+      const traffic = res.summary.traffic;
+      const tbTraffic = document.getElementById('tblDrTrafficSummary');
+
+      // Match the user's reference image structure
+      let htmlTrf = `<thead><tr><th>Type</th><th class="text-right">Total</th></tr></thead><tbody>`;
+
+      const trfRows = [
+        { key: "Walk In", bold: false },
+        { key: "Follow Up", bold: false },
+        { key: "Delivery & Showing", bold: false },
+        { key: "Online Only", bold: false },
+        { key: "Repair Order", bold: false },
+        { key: "Repair Cancel", bold: false },
+        { key: "Repair Finish", bold: false },
+        { key: "Total Traffic", bold: true },
+        { key: "Sales Traffic", bold: true },
+        { key: "Repair Traffic", bold: true },
+        { key: "Total Customer", bold: true }
+      ];
+
+      trfRows.forEach(row => {
+        const val = traffic[row.key] || 0;
+        const cls = row.bold ? "row-bold" : "";
+        htmlTrf += `<tr class="${cls}"><td>${row.key}</td><td class="text-right">${val.toLocaleString('id-ID')}</td></tr>`;
+      });
+      htmlTrf += `</tbody>`;
+      if (tbTraffic) tbTraffic.innerHTML = htmlTrf;
+
+      // 3. Render Advisor Summary
+      const advisors = res.summary.advisors;
+      const tbAdv = document.getElementById('tblDrAdvisorSummary');
+      let htmlAdv = `<thead><tr><th>Customer Advisor</th><th class="text-right">Total Handling</th><th class="text-right">% Total</th></tr></thead><tbody>`;
+
+      let totalHandlingSum = 0;
+      advisors.forEach(a => {
+        totalHandlingSum += (a.total || 0);
+        htmlAdv += `<tr><td>${a.advisor}</td><td class="text-right">${a.total}</td><td class="text-right">${a.percentage}</td></tr>`;
+      });
+
+      // Add Total row
+      htmlAdv += `<tr class="row-total"><td>Total</td><td class="text-right">${totalHandlingSum}</td><td class="text-right">100.00%</td></tr>`;
+      htmlAdv += `</tbody>`;
+      if (tbAdv) tbAdv.innerHTML = htmlAdv;
+
+      // 4. Render Main Table
+      this.renderDailyReportTableBody(res.data, res.columns);
+
+      // Header
+      const head = document.getElementById('tblDrMainHead');
+      let headHtml = "<tr>";
+      res.columns.forEach(col => { headHtml += `<th>${col}</th>`; });
+      headHtml += "</tr>";
+      if (head) head.innerHTML = headHtml;
+
+      // Update Row Count
+      const rowCountBadge = document.getElementById('drRowCountBadge');
+      if (rowCountBadge) rowCountBadge.innerText = `${res.data.length} Rows`;
+
+      // Save current data for excel export
+      this.currentDrData = res;
+    },
+
+    renderDailyReportTableBody(data, columns) {
+      const body = document.getElementById('tblDrMainBody');
+      let bodyHtml = "";
+
+      if (!data || data.length === 0) {
+        body.innerHTML = '<tr><td colspan="25" class="text-center text-muted-empty">No data found matching current filters.</td></tr>';
+        return;
+      }
+
+      data.forEach(row => {
+        bodyHtml += "<tr>";
+        columns.forEach(col => {
+          let val = row[col] || '-';
+          let style = "";
+
+          // Add some semantic styling
+          if (col === "Status Kedatangan") {
+            if (val.toLowerCase().includes("walk")) style = "color: #0ea5e9; font-weight: 600;";
+            else if (val.toLowerCase().includes("repair")) style = "color: #8b5cf6; font-weight: 600;";
+          }
+
+          bodyHtml += `<td style="${style}">${val}</td>`;
+        });
+        bodyHtml += "</tr>";
+      });
+      body.innerHTML = bodyHtml;
+    },
+
+    filterDailyReportTable() {
+      if (!this.currentDrData) return;
+
+      const searchVal = document.getElementById('drSearchInput').value.toLowerCase();
+      const columns = this.currentDrData.columns;
+
+      const filtered = this.currentDrData.data.filter(row => {
+        return columns.some(col => String(row[col] || '').toLowerCase().includes(searchVal));
+      });
+
+      this.renderDailyReportTableBody(filtered, columns);
+      document.getElementById('drRowCountBadge').innerText = `${filtered.length} Rows`;
+    },
+
+    exportDailyReportExcel() {
+      if (!this.currentDrData || !this.currentDrData.data || this.currentDrData.data.length === 0) {
+        alert("No data to export. Please filter first.");
+        return;
+      }
+
+      const data = this.currentDrData.data;
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Daily Report");
+
+      const filename = `Daily_Report_${new Date().getTime()}.xlsx`;
+      XLSX.writeFile(wb, filename);
+    },
+
+    sendDailyReportEmailPrompt() {
+      if (!this.currentDrData) {
+        alert("Please filter data first.");
+        return;
+      }
+
+      const email = prompt("Enter recipient email:", "");
+      if (!email) return;
+
+      const loc = document.getElementById('drFilterLocation').value;
+      const monthStr = document.getElementById('drFilterMonth').value;
+      const yearStr = document.getElementById('drFilterYear').value;
+
+      if (!monthStr || !yearStr) {
+        alert("Please select both Month and Year.");
+        return;
+      }
+
+      const month = parseInt(monthStr, 10);
+      const year = parseInt(yearStr, 10);
+      if (isNaN(month) || isNaN(year)) {
+        alert("Month or Year is invalid.");
+        return;
+      }
+
+      this.showLoading(true);
+      google.script.run
+        .withSuccessHandler(res => {
+          this.showLoading(false);
+          alert(res.message);
+        })
+        .sendDailyReportEmail(loc, monthStr, yearStr, email);
+    }
+  };
+
+  // Initialize App on Load
+  document.addEventListener('DOMContentLoaded', () => {
+    app.init();
+    // Load initial data (without sync) on first open
+    const monthStr = document.getElementById('filterMonth').value;
+    const yearStr = document.getElementById('filterYear').value;
+    const m = parseInt(monthStr) - 1;
+    const y = parseInt(yearStr);
+    const startD = new Date(y, m, 1);
+    const endD = new Date(y, m + 1, 0);
+    const pad = n => n < 10 ? '0' + n : n;
+    const startDate = `${startD.getFullYear()}-${pad(startD.getMonth() + 1)}-${pad(startD.getDate())}`;
+    const endDate = `${endD.getFullYear()}-${pad(endD.getMonth() + 1)}-${pad(endD.getDate())}`;
+
+    app.showLoading(true);
+    google.script.run
+      .withSuccessHandler((res) => {
+        app.onSuccess(res);
+        google.script.run
+          .withSuccessHandler(app.onAnnualSuccess.bind(app))
+          .getAnnualPerformance(y);
+      })
+      .withFailureHandler(app.onFailure.bind(app))
+      .getDashboardDailySales(startDate, endDate);
+  });
+</script>

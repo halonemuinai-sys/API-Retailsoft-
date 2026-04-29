@@ -1,0 +1,35 @@
+<div class="view-container">
+  <div class="table-container glass-panel">
+    <div class="table-header">
+      <h2><i class="fa-solid fa-list"></i> Retail Sales Details</h2>
+      <div class="table-actions">
+         <select id="filterLocation" class="filter-dropdown" title="Filter by Location" aria-label="Filter by Location" onchange="app.filterTable('sales', 'searchTx', 'tableBodyTx')">
+            <option value="">All Locations</option>
+         </select>
+         <input type="text" id="searchTx" placeholder="Search transactions..." onkeyup="app.filterTable('sales', 'searchTx', 'tableBodyTx')">
+      </div>
+    </div>
+    <div class="table-wrapper">
+      <table id="salesTable">
+        <thead>
+          <tr>
+            <th>Date & Time</th>
+            <th>Transaction No</th>
+            <th>Location</th>
+            <th>Salesman</th>
+            <th>Customer</th>
+            <th>Item / Collection</th>
+            <th class="text-center">Qty</th>
+            <th class="text-right">Disc</th>
+            <th class="text-right">Tax</th>
+            <th class="text-right">Price (Gross)</th>
+            <th class="text-right">Net Sales</th>
+          </tr>
+        </thead>
+        <tbody id="tableBodyTx">
+          <tr><td colspan="11" class="text-center text-muted-empty">No data available. Please Sync.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

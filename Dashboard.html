@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bvlgari Dashboard V2</title>
+  <!-- Google Fonts & Font Awesome -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- CSS Styles -->
+  <?!= include('Styles'); ?>
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar Component -->
+    <?!= include('Sidebar'); ?>
+    
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Global Top Bar for Filters -->
+      <header class="glass-header global-filter">
+        <div class="page-title">
+          <h2 id="currentPageTitle">Dashboard Overview</h2>
+        </div>
+        <div class="filter-area">
+          <div class="date-input-group">
+            <label for="filterMonth">Month</label>
+            <select id="filterMonth" class="filter-dropdown">
+              <option value="1">January</option>
+              <option value="2">February</option>
+              <option value="3">March</option>
+              <option value="4">April</option>
+              <option value="5">May</option>
+              <option value="6">June</option>
+              <option value="7">July</option>
+              <option value="8">August</option>
+              <option value="9">September</option>
+              <option value="10">October</option>
+              <option value="11">November</option>
+              <option value="12">December</option>
+            </select>
+          </div>
+          <div class="date-input-group">
+            <label for="filterYear">Year</label>
+            <select id="filterYear" class="filter-dropdown">
+              <option value="2024">2024</option>
+              <option value="2025">2025</option>
+              <option value="2026">2026</option>
+              <option value="2027">2027</option>
+            </select>
+          </div>
+          <button id="btnFetch" class="btn-primary" onclick="app.fetchData()">
+            <i class="fa-solid fa-arrows-rotate"></i> Sync Data
+          </button>
+        </div>
+      </header>
+
+      <!-- Router Outlet / Views -->
+      <div id="router-outlet" class="router-outlet-container">
+        <div id="view-dashboard" class="view-section active"><?!= include('ViewDashboard'); ?></div>
+        <div id="view-transactions" class="view-section hidden"><?!= include('ViewTransactions'); ?></div>
+        <div id="view-dps" class="view-section hidden"><?!= include('ViewDPS'); ?></div>
+        <div id="view-annual-locations" class="view-section hidden"><?!= include('ViewAnnualLocations'); ?></div>
+        <div id="view-daily-report" class="view-section hidden"><?!= include('ViewDailyReport'); ?></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay" class="loading-overlay hidden">
+    <div class="spinner"></div>
+    <p>Fetching Data...</p>
+  </div>
+
+  <!-- Javascript Logic -->
+  <?!= include('Scripts'); ?>
+</body>
+</html>

@@ -1,0 +1,54 @@
+<div class="view-container">
+  <div class="kpi-grid kpi-grid-spaced">
+    <div class="kpi-card glass-panel">
+      <div class="kpi-icon kpi-icon-dps"><i class="fa-solid fa-boxes-packing"></i></div>
+      <div class="kpi-details">
+        <h3>Deposit Barang Jual</h3>
+        <p id="kpiDpsBarangJualRev">0</p>
+        <div id="kpiDpsBarangJualRevTrend" class="trend-indicator trend-up"><i class="fa-solid fa-arrow-trend-up"></i> 11.2% <span>vs last month</span></div>
+      </div>
+    </div>
+    <div class="kpi-card glass-panel">
+      <div class="kpi-icon kpi-icon-svc-alt"><i class="fa-solid fa-wrench"></i></div>
+      <div class="kpi-details">
+        <h3>Deposit Service Center</h3>
+        <p id="kpiDpsServiceCenterRev">0</p>
+        <div id="kpiDpsServiceCenterRevTrend" class="trend-indicator trend-up"><i class="fa-solid fa-arrow-trend-up"></i> 5.4% <span>vs last month</span></div>
+      </div>
+    </div>
+    <div class="kpi-card glass-panel">
+      <div class="kpi-icon kpi-icon-dps"><i class="fa-solid fa-coins"></i></div>
+      <div class="kpi-details">
+        <h3>Total DPS Revenue</h3>
+        <p id="kpiDpsRev">0</p>
+        <div id="kpiDpsRevTrend" class="trend-indicator trend-up"><i class="fa-solid fa-arrow-trend-up"></i> 8.9% <span>vs last month</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-wrapper glass-panel">
+    <div class="section-title section-title-spaced dps-section-title">
+      <h2><i class="fa-solid fa-list-check"></i> DPS Transactions</h2>
+      <div class="table-actions">
+        <input type="text" id="searchDps" placeholder="Search customer, location, or transaction..." onkeyup="app.filterTable('dps', 'searchDps', 'tableBodyDps')">
+      </div>
+    </div>
+    <table id="dpsTable">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Transaction No</th>
+          <th>Location</th>
+          <th>Customer Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th class="text-center">Qty</th>
+          <th class="text-right">Price</th>
+        </tr>
+      </thead>
+      <tbody id="tableBodyDps">
+        <!-- Rendered via JS -->
+      </tbody>
+    </table>
+  </div>
+</div>
