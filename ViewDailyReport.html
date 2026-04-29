@@ -256,9 +256,62 @@
 
 .row-count-badge { background: #1e293b; color: white; padding: 0.3rem 0.7rem; border-radius: 6px; font-size: 0.75rem; font-weight: 600; }
 
-@media (max-width: 1200px) {
-    .report-summary-layout { grid-template-columns: 1fr; }
-    .report-controls { flex-direction: column; align-items: flex-start; gap: 1rem; }
+@media (max-width: 768px) {
+    .view-report-container { padding: 1rem; }
+    
+    .report-controls { 
+        flex-direction: column; 
+        align-items: stretch; 
+        gap: 1.25rem; 
+        padding: 1.25rem;
+    }
+    
+    .report-filters-group { 
+        flex-direction: column; 
+        align-items: stretch; 
+        gap: 0.75rem; 
+    }
+    
+    .report-export-group { 
+        flex-direction: column; 
+        gap: 0.5rem; 
+    }
+    
+    .filter-input-alt { 
+        width: 100%; 
+    }
+    
+    .btn-action { 
+        justify-content: center; 
+        width: 100%; 
+        padding: 0.6rem;
+    }
+
+    .report-summary-layout {
+        flex-direction: column;
+    }
+
+    .summary-card {
+        max-width: 100%;
+        width: 100%;
+        min-width: 100%;
+    }
+
+    .table-full-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+    }
+
+    .table-title-search {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+    }
+
+    .search-box-alt input {
+        width: 100%;
+    }
 }
 </style>
 
