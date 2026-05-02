@@ -1,0 +1,75 @@
+<script>
+/**
+ * VercelShim.html
+ * Meniru perilaku google.script.run untuk lingkungan Vercel.
+ */
+window.google = window.google || {};
+window.google.script = {
+  run: {
+    _successHandler: null,
+    _failureHandler: null,
+
+    withSuccessHandler: function(handler) {
+      this._successHandler = handler;
+      return this;
+    },
+
+    withFailureHandler: function(handler) {
+      this._failureHandler = handler;
+      return this;
+    },
+
+    /**
+     * Fungsi pemanggil generic untuk semua fungsi GAS
+     */
+    _callServer: function(functionName, args) {
+      const success = this._successHandler;
+      const failure = this._failureHandler;
+      
+      // Reset handlers for next call
+      this._successHandler = null;
+      this._failureHandler = null;
+
+      fetch('/api/call', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          functionName: functionName,
+          args: args
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (success) success(data);
+      })
+      .catch(error => {
+        console.error(`Error calling ${functionName}:`, error);
+        if (failure) failure(error);
+      });
+    }
+  }
+};
+
+/**
+ * Mendaftarkan fungsi-fungsi yang sering dipanggil di Js.html
+ */
+const gasFunctions = [
+  'doCrmLogin', 
+  'getCrmDashboardOverview', 
+  'getCrmTrafficData', 
+  'getCrmProfilingData',
+  'syncTrafficToSupabase',
+  'syncProfilingToSupabase',
+  'triggerGlobalSupabaseSync',
+  'getDailyReportData',
+  'sendDailyReportEmail'
+];
+
+gasFunctions.forEach(fnName => {
+  window.google.script.run[fnName] = function(...args) {
+    this._callServer(fnName, args);
+  };
+});
+</script>

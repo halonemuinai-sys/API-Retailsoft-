@@ -20,7 +20,7 @@ var BASE_URL = "http://139.99.102.231:8189/api";
 // 🔴 SILAKAN ISI TOKEN ANDA DI SINI
 // Masukkan token asli Anda (misalnya hasil copy-paste dari aplikasi postman/auth Anda)
 // Contoh: "Bearer eyJhbGciOiJIUzI1NiIsInR..."
-var API_TOKEN = "Bearer MASUKKAN_TOKEN_ANDA_DISINI";
+var API_TOKEN = "Bearer B0KiIGq0Q7LP/Sg+mOuQNdEH6Xogt4Kf4W8sKhQJiMA6ItgTswhTtg8Mx2/Bzq3T";
 
 function onOpen() {
   var ui = SpreadsheetApp.getUi();

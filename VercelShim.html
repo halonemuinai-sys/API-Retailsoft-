@@ -1,0 +1,61 @@
+<script>
+/**
+ * VercelShim.html (Root Version)
+ * Bridge google.script.run for the main Bvlgari Dashboard system.
+ */
+window.google = window.google || {};
+window.google.script = {
+  run: {
+    _successHandler: null,
+    _failureHandler: null,
+
+    withSuccessHandler: function(handler) {
+      this._successHandler = handler;
+      return this;
+    },
+
+    withFailureHandler: function(handler) {
+      this._failureHandler = handler;
+      return this;
+    },
+
+    _callServer: function(functionName, args) {
+      const success = this._successHandler;
+      const failure = this._failureHandler;
+      this._successHandler = null;
+      this._failureHandler = null;
+
+      fetch('/api/call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ functionName: functionName, args: args })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (success) success(data);
+      })
+      .catch(error => {
+        console.error(`Error calling ${functionName}:`, error);
+        if (failure) failure(error);
+      });
+    }
+  }
+};
+
+// Daftar fungsi dari WebApp.gs & API script lainnya
+const mainFunctions = [
+  'syncDataFromDashboard',
+  'getDashboardDailySales',
+  'getAnnualPerformance',
+  'getDailyReportData',
+  'sendDailyReportEmail',
+  'fetchDailySales',
+  'buildMonthlyIndex'
+];
+
+mainFunctions.forEach(fnName => {
+  window.google.script.run[fnName] = function(...args) {
+    this._callServer(fnName, args);
+  };
+});
+</script>
